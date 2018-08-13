@@ -55,7 +55,9 @@
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
 
+extern "C" {
 #include "anet.h"
+}
 
 #define REDIS_LBR                       "\r\n"
 #define REDIS_STATUS_REPLY_OK           "OK"
@@ -1631,7 +1633,40 @@ namespace redis
       
       makecmd m("ZRANGEBYSCORE");
       m << key << min_str << max_str;
+      
+      if (withscores) {
+        m << "WITHSCORES";
+      }
         
+      if(max_count != -1 || offset > 0)
+      {
+        std::cerr << "Adding limit: " << offset << " " << max_count << std::endl;
+        m << "LIMIT" << offset << max_count;
+      }
+        
+      send_(socket, m);
+      recv_multi_bulk_reply_(socket, out);
+    }
+    
+    void zrevrangebyscore_base(bool withscores, const string_type & key, double max, double min, string_vector & out, int_type offset, int_type max_count, int range_modification)
+    {
+      int socket = get_socket(key);
+      std::string min_str, max_str;
+      if( range_modification & exclude_min )
+        min_str = "(";
+      if( range_modification & exclude_max )
+        max_str = "(";
+      
+      min_str += boost::lexical_cast<std::string>(min);
+      max_str += boost::lexical_cast<std::string>(max);
+      
+      makecmd m("ZREVRANGEBYSCORE");
+      m << key << max_str << min_str;
+        
+      if (withscores) {
+        m << "WITHSCORES";
+      }
+
       if(max_count != -1 || offset > 0)
       {
         std::cerr << "Adding limit: " << offset << " " << max_count << std::endl;
@@ -1652,6 +1687,18 @@ namespace redis
     {
       string_vector res;
       zrangebyscore_base(true, key, min, max, res, offset, max_count, range_modification);
+      convert(res, out);
+    }
+    
+    void zrevrangebyscore(const string_type & key, double max, double min, string_vector & out, int_type offset = 0, int_type max_count = -1, int range_modification = 0)
+    {
+      zrevrangebyscore_base(false, key, max, min, out, offset, max_count, range_modification);
+    }
+    
+    void zrevrangebyscore(const string_type & key, double max, double min, string_score_vector & out, int_type offset = 0, int_type max_count = -1, int range_modification = 0)
+    {
+      string_vector res;
+      zrevrangebyscore_base(true, key, max, min, res, offset, max_count, range_modification);
       convert(res, out);
     }
     
